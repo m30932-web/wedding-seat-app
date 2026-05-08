@@ -10,7 +10,7 @@ import os
 # =====================================================================
 # 🛠️ 系統環境與權限設定區 (管理員專用)
 # =====================================================================
-SYSTEM_ENV = "Testing"  
+SYSTEM_ENV = "Production"  # 已經為你預設為 Production 正式環境
 ADMIN_PASSWORD = "666"  
 BACKUP_FILE = f"wedding_seat_data_{SYSTEM_ENV}.json"
 # =====================================================================
@@ -339,7 +339,7 @@ def sync_table(t_id):
 # 3. 側邊欄控制中心
 with st.sidebar:
     if st.session_state.role != "Admin":
-        st.info("💡 **訪客模式**：您可以自由使用與儲存您的專屬方案，不影響系統預設主檔，資料僅會儲存在個人電腦中。")
+        st.info("💡 **訪客測試模式**：您可以自由使用與儲存您的專屬方案，不影響系統預設主檔，資料僅會儲存在個人電腦中。")
         with st.expander("🔓 管理員解鎖", expanded=False):
             pwd = st.text_input("輸入管理密碼", type="password", key="login_pwd")
             if st.button("驗證身分", use_container_width=True):
@@ -377,7 +377,6 @@ with st.sidebar:
                 st.success("匯入完成！")
             except Exception as e: st.error(f"錯誤：{e}")
 
-        # 💡 將「撤銷所有匯入名單」收合在此區塊內
         st.markdown("<div style='margin-top: 10px;'></div>", unsafe_allow_html=True)
         if st.button("🗑️ 撤銷所有匯入名單", use_container_width=True):
             imported_ids = [k for k, v in st.session_state.app_guests.items() if v.get('source') == 'import']
@@ -388,7 +387,6 @@ with st.sidebar:
             else:
                 st.info("目前沒有匯入的名單可撤銷。")
 
-    # 手動新增單筆賓客
     with st.expander("✍️ 手動新增單筆賓客", expanded=False):
         manual_side = st.radio("歸屬分欄：", st.session_state.guest_groups, horizontal=True, key="man_side")
         cat_options = st.session_state.sys_categories + ["(自訂新類別)"]
@@ -478,13 +476,18 @@ with st.sidebar:
     uploaded_draft = st.file_uploader("📂 載入您之前的進度檔 (.json)", type="json", label_visibility="collapsed")
     if uploaded_draft and st.button("🚀 確認載入此進度", use_container_width=True):
         try:
-            data = json.load(uploaded_draft)
-            st.session_state.app_tables, st.session_state.app_guests = data.get("tables", []), data.get("guests", {})
+            # 🔥 [核心修復] 改用 getvalue() 讀取位元組資料，徹底避開 Streamlit 檔案指標耗盡的 Bug！
+            file_bytes = uploaded_draft.getvalue()
+            data = json.loads(file_bytes.decode('utf-8'))
+            
+            st.session_state.app_tables = data.get("tables", [])
+            st.session_state.app_guests = data.get("guests", {})
             st.session_state.guest_groups = data.get("groups", st.session_state.guest_groups)
-            st.success("✅ 進度載入成功！")
+            
+            st.toast("✅ 進度載入成功！", icon="✅")
             st.rerun()
-        except:
-            st.error("❌ 檔案讀取失敗，請確認是否為正確的進度檔。")
+        except Exception as e:
+            st.error(f"❌ 檔案讀取失敗，錯誤原因：{e}")
 
 # 4. 主畫面佈局
 st.subheader("1. 賓客座位分配區")
@@ -494,7 +497,6 @@ for g in st.session_state.app_guests.values():
 status_texts = [f"<b>{t['header']}</b> (<span style='color:{'#e74c3c' if t['capacity']-table_occupancy[t['id']]<=0 else '#27ae60'};'>餘 {t['capacity']-table_occupancy[t['id']]}</span>)" for t in st.session_state.app_tables]
 st.markdown(f"<div style='padding:12px; background-color:#f8f9fa; border-radius:8px; margin-bottom:20px; font-size:14px;'>📍 剩餘空位：{' ｜ '.join(status_texts)}</div>", unsafe_allow_html=True)
 
-# 顯示各個群組 (男方/主桌/女方 等)
 def display_guest_dropdowns(guests_list, column_obj, main_title, count, unassigned, search_key):
     with column_obj:
         html_title = f"""
