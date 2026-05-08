@@ -339,7 +339,7 @@ def sync_table(t_id):
 # 3. 側邊欄控制中心
 with st.sidebar:
     if st.session_state.role != "Admin":
-        st.info("💡 **訪客模式**：您可以自由使用與儲存您的專屬方案，不影響系統預設主檔，資料僅會儲存在個人電腦中。")
+        st.info("💡 **訪客測試模式**：您可以自由使用與儲存您的專屬方案，不影響系統預設主檔，資料僅會儲存在個人電腦中。")
         with st.expander("🔓 管理員解鎖", expanded=False):
             pwd = st.text_input("輸入管理密碼", type="password", key="login_pwd")
             if st.button("驗證身分", use_container_width=True):
@@ -438,6 +438,15 @@ with st.sidebar:
         if st.button("📥 儲存為官方方案", use_container_width=True):
             if v_name: 
                 st.session_state.app_versions[v_name] = {"tables": copy.deepcopy(st.session_state.app_tables), "guests": copy.deepcopy(st.session_state.app_guests), "groups": copy.deepcopy(st.session_state.guest_groups)}
+                # 💡 在儲存按鈕這邊加上強制寫入的保護
+                try:
+                    d = {}
+                    if os.path.exists(BACKUP_FILE):
+                        with open(BACKUP_FILE, "r", encoding="utf-8") as f: d = json.load(f)
+                    d["app_versions"] = st.session_state.app_versions
+                    with open(BACKUP_FILE, "w", encoding="utf-8") as f: json.dump(d, f, ensure_ascii=False, indent=2)
+                except Exception as e:
+                    st.error(f"寫入失敗: {e}")
                 st.success(f"已儲存：{v_name}")
                 
         if st.session_state.app_versions:
@@ -476,7 +485,6 @@ with st.sidebar:
     uploaded_draft = st.file_uploader("📂 載入您之前的進度檔 (.json)", type="json", label_visibility="collapsed")
     if uploaded_draft and st.button("🚀 確認載入此進度", use_container_width=True):
         try:
-            # 🔥 [核心修復] 改用 getvalue() 讀取位元組資料，徹底避開 Streamlit 檔案指標耗盡的 Bug！
             file_bytes = uploaded_draft.getvalue()
             data = json.loads(file_bytes.decode('utf-8'))
             
@@ -636,6 +644,15 @@ if st.session_state.role == "Admin":
         d = {}
         if os.path.exists(BACKUP_FILE):
             with open(BACKUP_FILE, "r", encoding="utf-8") as f: d = json.load(f)
-        d.update({"guest_groups": st.session_state.guest_groups, "sys_categories": st.session_state.sys_categories, "app_tables": st.session_state.app_tables, "app_guests": st.session_state.app_guests, "sys_title": st.session_state.sys_title})
+        
+        # 🔥 最關鍵的補丁：把 app_versions 一併存進硬碟！
+        d.update({
+            "guest_groups": st.session_state.guest_groups, 
+            "sys_categories": st.session_state.sys_categories, 
+            "app_tables": st.session_state.app_tables, 
+            "app_guests": st.session_state.app_guests, 
+            "sys_title": st.session_state.sys_title,
+            "app_versions": st.session_state.app_versions
+        })
         with open(BACKUP_FILE, "w", encoding="utf-8") as f: json.dump(d, f, ensure_ascii=False, indent=2)
     except: pass
