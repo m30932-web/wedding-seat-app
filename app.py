@@ -10,7 +10,7 @@ import os
 # =====================================================================
 # 🛠️ 系統環境與權限設定區 (管理員專用)
 # =====================================================================
-SYSTEM_ENV = "Production"  # 已經為你預設為 Production 正式環境
+SYSTEM_ENV = "Production"  # 預設為 Production 正式環境
 ADMIN_PASSWORD = "666"  
 BACKUP_FILE = f"wedding_seat_data_{SYSTEM_ENV}.json"
 # =====================================================================
@@ -336,6 +336,23 @@ def sync_table(t_id):
         t['row'] = st.session_state.get(f"r_{t_id}", t['row'])
         t['col'] = st.session_state.get(f"l_{t_id}", t['col'])
 
+# 🔥 核心修復：這就是防止「載入沒反應」的攔截器！
+def process_uploaded_draft():
+    draft_file = st.session_state.get("draft_uploader")
+    if draft_file is not None:
+        try:
+            file_bytes = draft_file.getvalue()
+            data = json.loads(file_bytes.decode('utf-8'))
+            
+            st.session_state.app_tables = data.get("tables", [])
+            st.session_state.app_guests = data.get("guests", {})
+            st.session_state.guest_groups = data.get("groups", st.session_state.guest_groups)
+            st.session_state.target_tables_input = len(st.session_state.app_tables)
+            
+            st.session_state.draft_msg = ("success", "✅ 進度載入成功！")
+        except Exception as e:
+            st.session_state.draft_msg = ("error", f"❌ 檔案讀取失敗：{e}")
+
 # 3. 側邊欄控制中心
 with st.sidebar:
     if st.session_state.role != "Admin":
@@ -438,7 +455,6 @@ with st.sidebar:
         if st.button("📥 儲存為官方方案", use_container_width=True):
             if v_name: 
                 st.session_state.app_versions[v_name] = {"tables": copy.deepcopy(st.session_state.app_tables), "guests": copy.deepcopy(st.session_state.app_guests), "groups": copy.deepcopy(st.session_state.guest_groups)}
-                # 💡 在儲存按鈕這邊加上強制寫入的保護
                 try:
                     d = {}
                     if os.path.exists(BACKUP_FILE):
@@ -482,20 +498,19 @@ with st.sidebar:
     )
     
     st.markdown("<div style='margin-top:10px;'></div>", unsafe_allow_html=True)
-    uploaded_draft = st.file_uploader("📂 載入您之前的進度檔 (.json)", type="json", label_visibility="collapsed")
-    if uploaded_draft and st.button("🚀 確認載入此進度", use_container_width=True):
-        try:
-            file_bytes = uploaded_draft.getvalue()
-            data = json.loads(file_bytes.decode('utf-8'))
-            
-            st.session_state.app_tables = data.get("tables", [])
-            st.session_state.app_guests = data.get("guests", {})
-            st.session_state.guest_groups = data.get("groups", st.session_state.guest_groups)
-            
-            st.toast("✅ 進度載入成功！", icon="✅")
-            st.rerun()
-        except Exception as e:
-            st.error(f"❌ 檔案讀取失敗，錯誤原因：{e}")
+    # 🔥 綁定剛剛寫好的事件攔截器 (on_click=process_uploaded_draft)
+    st.file_uploader("📂 載入您之前的進度檔 (.json)", type="json", key="draft_uploader", label_visibility="collapsed")
+    if st.session_state.get("draft_uploader"):
+        st.button("🚀 確認載入此進度", use_container_width=True, on_click=process_uploaded_draft)
+        
+    # 顯示攔截器回傳的成功或失敗訊息
+    if "draft_msg" in st.session_state:
+        msg_type, msg_text = st.session_state.draft_msg
+        if msg_type == "success":
+            st.success(msg_text)
+        else:
+            st.error(msg_text)
+        del st.session_state.draft_msg
 
 # 4. 主畫面佈局
 st.subheader("1. 賓客座位分配區")
@@ -644,15 +659,6 @@ if st.session_state.role == "Admin":
         d = {}
         if os.path.exists(BACKUP_FILE):
             with open(BACKUP_FILE, "r", encoding="utf-8") as f: d = json.load(f)
-        
-        # 🔥 最關鍵的補丁：把 app_versions 一併存進硬碟！
-        d.update({
-            "guest_groups": st.session_state.guest_groups, 
-            "sys_categories": st.session_state.sys_categories, 
-            "app_tables": st.session_state.app_tables, 
-            "app_guests": st.session_state.app_guests, 
-            "sys_title": st.session_state.sys_title,
-            "app_versions": st.session_state.app_versions
-        })
+        d.update({"guest_groups": st.session_state.guest_groups, "sys_categories": st.session_state.sys_categories, "app_tables": st.session_state.app_tables, "app_guests": st.session_state.app_guests, "sys_title": st.session_state.sys_title, "app_versions": st.session_state.app_versions})
         with open(BACKUP_FILE, "w", encoding="utf-8") as f: json.dump(d, f, ensure_ascii=False, indent=2)
     except: pass
