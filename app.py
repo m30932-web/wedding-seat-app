@@ -339,7 +339,7 @@ def sync_table(t_id):
 # 3. 側邊欄控制中心
 with st.sidebar:
     if st.session_state.role != "Admin":
-        st.info("💡 **訪客測試模式**：您可以自由使用與儲存您的專屬方案，不影響系統預設主檔，資料僅會儲存在個人電腦中。")
+        st.info("💡 **訪客模式**：您可以自由使用與儲存您的專屬方案，不影響系統預設主檔，資料僅會儲存在個人電腦中。")
         with st.expander("🔓 管理員解鎖", expanded=False):
             pwd = st.text_input("輸入管理密碼", type="password", key="login_pwd")
             if st.button("驗證身分", use_container_width=True):
